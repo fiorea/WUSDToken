@@ -9,20 +9,15 @@
     "test": "npm run compile && hardhat test",
     "test:file": "npm run compile && hardhat test  ./test/${TEST_FILE}",
     "compile": "hardhat compile",
-    "deploy": "npm run compile && npx hardhat ${DEPLOY_SCRIPT} --network ${DEPLOY_NETWORK} ",
     "size": "npm run compile && hardhat size-contracts",
-    "typechain": "hardhat typechain",
-    "abis": "npm run compile && node ./scripts/updateAbis && npm run prettier:abis",
-    "prettier:abis": "prettier --write 'abis/**/*.json'",
-    "lint:sol": "solhint  'contracts/**/*.sol'",
-    "test:coverage": "TS_NODE_TRANSPILE_ONLY=true hardhat coverage && hardhat compile --force"
+    "prettier:abis": "prettier --write 'abis/**/*.json'"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@nomicfoundation/hardhat-verify": "^2.0.3",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.3",
     "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.3",
     "@openzeppelin/hardhat-upgrades": "^3.6.0",
     "argparse": "2.0.1",
     "chai": "^4.3.7",
@@ -34,11 +29,6 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.1.0",
-    "@openzeppelin/contracts-upgradeable": "5.1.0",
-    "@synapseprotocol/sdk": "^0.94.1",
-    "bn.js": "^5.2.0",
-    "eslint-plugin-n": "^15.7.0",
-    "hardhat-contract-sizer": "^2.8.0",
-    "prb-math": "2.4.3"
+    "@openzeppelin/contracts-upgradeable": "5.1.0"
   }
 }

@@ -7,12 +7,13 @@ describe("WUSDToken", function () {
     let owner;
     let user1;
     let user2;
+    let user3;
     const minter1 = ethers.encodeBytes32String("minter1");
     const minter2 = ethers.encodeBytes32String("minter2");
     const minter3 = ethers.encodeBytes32String("minter3");
 
     beforeEach(async function () {
-        [owner, user1, user2] = await ethers.getSigners();
+        [owner, user1, user2, user3] = await ethers.getSigners();
         const WUSDToken = await ethers.getContractFactory("WUSDToken");
         wusd = await upgrades.deployProxy(WUSDToken, ["WUSD", "wusd"], {
             initializer: "initialize",
@@ -22,6 +23,9 @@ describe("WUSDToken", function () {
     });
 
     it("Should deploy with correct initial state", async function () {
+        await expect(wusd.initialize("WUSD", "wusd"))
+            .to.be.revertedWithCustomError(wusd, "InvalidInitialization");
+
         expect(await wusd.owner()).to.equal(owner.address);
         expect(await wusd.name()).to.equal("WUSD");
         expect(await wusd.symbol()).to.equal("wusd");
@@ -41,9 +45,12 @@ describe("WUSDToken", function () {
         await expect(wusd.addMinter(ethers.ZeroHash))
             .to.be.revertedWith("zero address");
 
-        await expect(wusd.connect(user1).pause())
+        await expect(wusd.connect(user1).addMinter(minter2))
             .to.be.revertedWithCustomError(wusd, "OwnableUnauthorizedAccount")
-            .withArgs(user1.address);
+
+        await wusd.pause()
+        await expect(wusd.addMinter(minter2))
+            .to.be.revertedWithCustomError(wusd, "EnforcedPause");
     });
 
     it("Should mint tokens correctly", async function () {
@@ -69,6 +76,16 @@ describe("WUSDToken", function () {
 
         await expect(wusd.mint(minter1, 0, owner.address))
             .to.be.revertedWith("zero amount");
+
+        await expect(wusd.addMinter(minter1))
+            .to.be.revertedWith("already minter");
+
+        await expect(wusd.connect(user1).mint(minter1, amount1, user2.address))
+            .to.be.revertedWithCustomError(wusd, "OwnableUnauthorizedAccount");
+
+        await wusd.pause()
+        await expect(wusd.mint(minter1, amount1, user1.address))
+            .to.be.revertedWithCustomError(wusd, "EnforcedPause");
     });
 
     it("Should burn tokens correctly", async function () {
@@ -89,6 +106,13 @@ describe("WUSDToken", function () {
 
         await expect(wusd.burn(minter1, 0))
             .to.be.revertedWith("zero amount");
+
+        await expect(wusd.connect(user1).burn(minter1, mintAmount))
+            .to.be.revertedWithCustomError(wusd, "OwnableUnauthorizedAccount");
+
+        await wusd.pause()
+        await expect(wusd.burn(minter1, mintAmount))
+            .to.be.revertedWithCustomError(wusd, "EnforcedPause");
     });
 
     it("Should handle approvals correctly", async function () {
@@ -104,6 +128,24 @@ describe("WUSDToken", function () {
 
         await expect(wusd.decreaseAllowance(user1.address, amount * 2))
             .to.be.revertedWith("decreased allowance below zero");
+
+        await wusd.approve(user2.address, amount);
+        await expect(wusd.connect(user2).transferFrom(owner.address, user3.address, amount + 1))
+            .to.be.revertedWith("insufficient allowance");
+
+
+        await expect(wusd.approve(ethers.ZeroAddress, amount))
+            .to.be.revertedWith("approve to the zero address");
+
+        await wusd.pause()
+        await expect(wusd.approve(user1.address, amount))
+            .to.be.revertedWithCustomError(wusd, "EnforcedPause");
+
+        await expect(wusd.decreaseAllowance(user1.address, amount))
+            .to.be.revertedWithCustomError(wusd, "EnforcedPause");
+
+        await expect(wusd.increaseAllowance(user1.address, amount))
+            .to.be.revertedWithCustomError(wusd, "EnforcedPause");
     });
 
     it("Should handle transfers correctly with single and multiple minters", async function () {
@@ -127,14 +169,27 @@ describe("WUSDToken", function () {
         expect(Number(await wusd.balanceOfMinter(user2.address, minter1))).to.equal(500000);
         expect(Number(await wusd.balanceOfMinter(user2.address, minter2))).to.equal(1000000);
 
-        // transferFrom
-        await wusd.approve(user1.address, 500000);
-        await wusd.connect(user1).transferFrom(owner.address, user2.address, 500000);
-        expect(Number(await wusd.balanceOf(owner.address))).to.equal(500000);
-
         // Test insufficient balance
         await expect(wusd.transfer(user1.address, 4000000))
             .to.be.revertedWith("transfer amount exceeds balance");
+    });
+
+    it("Should handle transferFrom functionality correctly", async function () {
+        await wusd.addMinter(minter1);
+        await wusd.mint(minter1, 1000000, owner.address);
+
+        // transferFrom
+        await wusd.approve(user1.address, 500000);
+        await wusd.connect(user1).transferFrom(owner.address, user3.address, 500000);
+        expect(Number(await wusd.balanceOf(owner.address))).to.equal(500000);
+
+        const maxUint256 = ethers.MaxUint256;
+        await wusd.approve(user1.address, maxUint256);
+        expect(await wusd.allowance(owner.address, user1.address)).to.equal(maxUint256);
+        await wusd.connect(user1).transferFrom(owner.address, user3.address, 500000);
+        expect(await wusd.allowance(owner.address, user1.address)).to.equal(maxUint256);
+
+
     });
 
     it("Should handle pause functionality correctly", async function () {
@@ -156,6 +211,9 @@ describe("WUSDToken", function () {
         await expect(wusd.connect(user1).pause())
             .to.be.revertedWithCustomError(wusd, "OwnableUnauthorizedAccount")
             .withArgs(user1.address);
+
+        await expect(wusd.connect(user1).unpause())
+            .to.be.revertedWithCustomError(wusd, "OwnableUnauthorizedAccount");
     });
 
     it("Should handle upgrades correctly", async function () {
@@ -166,8 +224,10 @@ describe("WUSDToken", function () {
             upgrades.upgradeProxy(proxyAddress, WUSDToken)
         ).to.not.be.reverted;
 
-        await expect(wusd.connect(user1).pause())
-            .to.be.revertedWithCustomError(wusd, "OwnableUnauthorizedAccount")
-            .withArgs(user1.address);
+        const newImplementationAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+
+        await expect(wusd.connect(user1).upgradeToAndCall(newImplementationAddress, "0x"))
+            .to.be.revertedWithCustomError(wusd, "OwnableUnauthorizedAccount");
+
     });
 });

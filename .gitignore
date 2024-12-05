@@ -16,7 +16,7 @@ distribution-data*.json
 fee-reference.json
 uniswap-fee-reference.json
 **/.DS_Store
-
+example/
 #Hardhat files
 cache
 artifacts
